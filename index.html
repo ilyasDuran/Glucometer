@@ -65,6 +65,32 @@
     </div>
 
     <script>
+
+        // Sayfa her yüklendiğinde çalışacak olan kod
+        window.onload = () => {
+            // Önce internet gelince yapılacak senkronizasyonu başlat (önceki aşamada eklemiştik)
+            syncOfflineData();
+        
+            // Hafızada kayıtlı referans var mı kontrol et
+            const savedRefs = localStorage.getItem('gluco_refs');
+            
+            if (savedRefs) {
+                refs = JSON.parse(savedRefs);
+                
+                // Form alanlarını doldur (Kullanıcı ne girildiğini görsün)
+                document.getElementById('ref_s1m').value = refs.s1m;
+                document.getElementById('ref_s1x').value = refs.s1x;
+                document.getElementById('ref_s2m').value = refs.s2m;
+                document.getElementById('ref_s2x').value = refs.s2x;
+        
+                // Otomatik olarak ana ekrana geç (Kullanıcı her seferinde "Ayarları Onayla" demesin)
+                document.getElementById('setup-screen').style.display = 'none';
+                document.getElementById('main-screen').style.display = 'block';
+                
+                console.log("Kayıtlı referanslar yüklendi ve ana ekrana geçildi.");
+            }
+        };
+        
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5e7MeyiMfWHQtwnZQThzrNApVNg16M2ypeVL4ZeH_u1_7k5ofEDz2w5q2Mkp8SiWI1A/exec";
         let refs = {};
 
@@ -80,6 +106,8 @@
                 Swal.fire({ icon: 'warning', title: 'Eksik Bilgi', text: 'Lütfen tüm referans değerlerini doldurun!', confirmButtonColor: '#3498db' });
                 return;
             }
+
+            localStorage.setItem('gluco_refs', JSON.stringify(refs));
 
             document.getElementById('setup-screen').style.display = 'none';
             document.getElementById('main-screen').style.display = 'block';
@@ -316,6 +344,7 @@ async function sendData() {
 </body>
 
 </html>
+
 
 
 
