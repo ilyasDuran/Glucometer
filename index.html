@@ -128,6 +128,35 @@
             document.getElementById('s2-msg').innerText = "";
           }
 
+        // İnternet yoksa veriyi tarayıcı hafızasına (kuyruğa) ekleyen fonksiyon
+        function saveToOfflineQueue(data) {
+            // Mevcut bekleyen listesini al, yoksa boş liste oluştur
+            let queue = JSON.parse(localStorage.getItem('pending_sync') || '[]');
+            
+            // Yeni veriyi listeye ekle
+            queue.push(data);
+            
+            // Güncel listeyi hafızaya geri yaz
+            localStorage.setItem('pending_sync', JSON.stringify(queue));
+            
+            Swal.fire({
+                icon: 'info',
+                title: 'Bağlantı Yok',
+                text: 'İnternetiniz şu an kapalı. Veri cihaza kaydedildi, internet gelince otomatik gönderilecek.',
+                timer: 3000
+            });
+            
+            // Formu temizle (Kullanıcı yeni cihaz girebilsin)
+            document.getElementById('seri').value = "";
+            document.getElementById('s1').value = "";
+            document.getElementById('s2').value = "";
+            document.getElementById('s1').className = "";
+            document.getElementById('s2').className = "";
+            document.getElementById('s1-msg').innerText = "";
+            document.getElementById('s2-msg').innerText = "";
+            document.getElementById('seri').focus();
+        }
+
 async function sendData() {
             const seriInput = document.getElementById('seri');
             const s1Input = document.getElementById('s1');
@@ -137,14 +166,22 @@ async function sendData() {
                 seri: seriInput.value,
                 s1: s1Input.value,
                 s2: s2Input.value,
-                ...refs
+                ...refs,
+                timestamp: new Date().toLocaleString('tr-TR') // Ne zaman kaydedildiğini eklemek önemli
             };
-
+        
             if(!data.seri || !data.s1 || !data.s2) {
-                Swal.fire({ icon: 'error', title: 'Hata', text: 'Eksik veri var!', confirmButtonColor: '#e74c3c' });
+                Swal.fire({ icon: 'error', title: 'Hata', text: 'Eksik veri var!' });
                 return;
             }
-
+        
+            // --- YENİ EKLENEN KONTROL ---
+            if (!navigator.onLine) {
+                saveToOfflineQueue(data);
+                return;
+            }
+            // ----------------------------
+        
             Swal.fire({ 
                 title: 'Kaydediliyor...', 
                 allowOutsideClick: false, 
@@ -234,12 +271,52 @@ async function sendData() {
                 .catch(err => console.log('Hata:', err));
             });
           }
+
+        // Hafızada bekleyen verileri Google Sheets'e gönderen fonksiyon
+        async function syncOfflineData() {
+            let queue = JSON.parse(localStorage.getItem('pending_sync') || '[]');
+            
+            if (queue.length === 0) return; // Bekleyen veri yoksa işlem yapma
+        
+            console.log("İnternet geldi, " + queue.length + " kayıt gönderiliyor...");
+            
+            for (let i = 0; i < queue.length; i++) {
+                try {
+                    await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        body: JSON.stringify(queue[i])
+                    });
+                } catch (e) {
+                    console.log("Gönderim başarısız, bir sonraki denemede tekrar yapılacak.");
+                    return; // Hata alırsak döngüden çık (internet tekrar gitmiş olabilir)
+                }
+            }
+        
+            // Tüm liste başarıyla bittiyse hafızayı temizle
+            localStorage.removeItem('pending_sync');
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'Eşitleme Başarılı',
+                text: 'Çevrimdışı kaydedilen veriler başarıyla aktarıldı.',
+                toast: true,
+                position: 'top-end',
+                timer: 3000,
+                showConfirmButton: false
+            });
+        }
+        
+        // Olay dinleyicileri: İnternet geldiğinde ve uygulama açıldığında çalışır
+        window.addEventListener('online', syncOfflineData);
+        window.addEventListener('load', syncOfflineData);
         
 
     </script>
 </body>
 
 </html>
+
 
 
 
