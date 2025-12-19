@@ -44,7 +44,7 @@
             <input type="number" id="ref_s2x" placeholder="L2 Max">
         </div>
         <button class="btn-ref" onclick="saveRefs()">Ayarları Onayla</button><br><br>
-        <button class="btn-ref" onclick="fetchLastRefs()" style="background:#f39c12; margin-bottom:10px;">En Son Referansları Getir</button>
+        <button class="btn-ref" onclick="fetchLastRefs(event)" style="background:#f39c12; margin-bottom:10px;">En Son Referansları Getir</button>
     </div>
 
     <div id="main-screen" class="card" style="display:none;">
@@ -67,29 +67,24 @@
     <script>
 
         // Sayfa her yüklendiğinde çalışacak olan kod
-        window.onload = () => {
-            // Önce internet gelince yapılacak senkronizasyonu başlat (önceki aşamada eklemiştik)
+        window.addEventListener('load', () => {
+            // 1. Bekleyen verileri senkronize et
             syncOfflineData();
         
-            // Hafızada kayıtlı referans var mı kontrol et
+            // 2. Referansları yükle
             const savedRefs = localStorage.getItem('gluco_refs');
-            
             if (savedRefs) {
                 refs = JSON.parse(savedRefs);
-                
-                // Form alanlarını doldur (Kullanıcı ne girildiğini görsün)
                 document.getElementById('ref_s1m').value = refs.s1m;
                 document.getElementById('ref_s1x').value = refs.s1x;
                 document.getElementById('ref_s2m').value = refs.s2m;
                 document.getElementById('ref_s2x').value = refs.s2x;
         
-                // Otomatik olarak ana ekrana geç (Kullanıcı her seferinde "Ayarları Onayla" demesin)
                 document.getElementById('setup-screen').style.display = 'none';
                 document.getElementById('main-screen').style.display = 'block';
-                
-                console.log("Kayıtlı referanslar yüklendi ve ana ekrana geçildi.");
+                console.log("Kayıtlı referanslar yüklendi.");
             }
-        };
+        });
         
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5e7MeyiMfWHQtwnZQThzrNApVNg16M2ypeVL4ZeH_u1_7k5ofEDz2w5q2Mkp8SiWI1A/exec";
         let refs = {};
@@ -251,8 +246,8 @@ async function sendData() {
             }
         }
 
-        async function fetchLastRefs() {
-            const btn = event.target;
+        async function fetchLastRefs(e) {
+            const btn = e.currentTarget;
             const originalText = btn.innerText;
             
             btn.innerText = "Yükleniyor...";
@@ -337,13 +332,13 @@ async function sendData() {
         
         // Olay dinleyicileri: İnternet geldiğinde ve uygulama açıldığında çalışır
         window.addEventListener('online', syncOfflineData);
-        window.addEventListener('load', syncOfflineData);
         
 
     </script>
 </body>
 
 </html>
+
 
 
 
