@@ -49,10 +49,18 @@
     <div id="main-screen" class="card" style="display:none;">
         <h2>Veri Girişi</h2>
         <input type="text" id="seri" placeholder="Cihaz Seri No">
+        
         <input type="number" id="s1" placeholder="Seviye 1 Sonucu" oninput="checkValue(this, 's1')">
+        <div id="s1-msg" style="font-size: 0.8rem; margin-bottom: 10px; transition: 0.3s;"></div>
+    
         <input type="number" id="s2" placeholder="Seviye 2 Sonucu" oninput="checkValue(this, 's2')">
+        <div id="s2-msg" style="font-size: 0.8rem; margin-bottom: 10px; transition: 0.3s;"></div>
+        
         <button class="btn-save" onclick="sendData()">SONUÇLARI KAYDET</button>
         <div id="status" class="status"></div>
+        <button onclick="backToSetup()" style="background: none; color: #888; border: 1px solid #444; margin-top: 15px; padding: 8px; border-radius: 8px; cursor: pointer; width: 100%; font-size: 0.8rem;">
+            ⚙️ Referans Ayarlarını Düzenle
+        </button>
     </div>
 
     <script>
@@ -80,13 +88,44 @@
 
         function checkValue(el, type) {
             const val = parseFloat(el.value);
+            const msgEl = document.getElementById(type + '-msg'); // s1-msg veya s2-msg
+            
+            // Referans değerlerini al
             const min = type === 's1' ? refs.s1m : refs.s2m;
             const max = type === 's1' ? refs.s1x : refs.s2x;
+            
+            // Sıfırlama
             el.className = "";
-            if (val < min) el.classList.add('low');
-            else if (val > max) el.classList.add('high');
-            else if (!isNaN(val)) el.classList.add('normal');
+            msgEl.innerText = "";
+            
+            if (isNaN(val)) return;
+        
+            if (val < min) {
+                el.classList.add('low');
+                msgEl.innerText = "⚠️ Düşük Değer (Min: " + min + ")";
+                msgEl.style.color = "#3498db";
+            } else if (val > max) {
+                el.classList.add('high');
+                msgEl.innerText = "⚠️ Yüksek Değer (Max: " + max + ")";
+                msgEl.style.color = "#e74c3c";
+            } else {
+                el.classList.add('normal');
+                msgEl.innerText = "✅ Değer Uygun";
+                msgEl.style.color = "#2ecc71";
+            }
         }
+
+        // Ayarlar ekranına geri dönme fonksiyonu
+        function backToSetup() {
+            document.getElementById('main-screen').style.display = 'none';
+            document.getElementById('setup-screen').style.display = 'block';
+                
+            // Opsiyonel: Girişleri temizle
+            document.getElementById('s1').value = "";
+            document.getElementById('s2').value = "";
+            document.getElementById('s1-msg').innerText = "";
+            document.getElementById('s2-msg').innerText = "";
+          }
 
 async function sendData() {
             const seriInput = document.getElementById('seri');
@@ -124,6 +163,8 @@ async function sendData() {
                 s2Input.value = "";
                 s1Input.className = "";
                 s2Input.className = "";
+                document.getElementById('s1-msg').innerText = "";
+                document.getElementById('s2-msg').innerText = "";
 
                 Swal.fire({ 
                     icon: 'success', 
@@ -189,4 +230,5 @@ async function sendData() {
 </body>
 
 </html>
+
 
