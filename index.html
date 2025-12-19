@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GlukoMeter IQC</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-dark@5/dark.css">
+    
+    <style>
+        :root { --bg: #121212; --card: #1e1e1e; --primary: #2ecc71; --error: #e74c3c; --text: #ffffff; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .card { background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 20px; max-width: 500px; margin-left: auto; margin-right: auto; }
+        h2 { margin-top: 0; color: var(--primary); font-size: 1.2rem; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 2px solid #333; background: #252525; color: white; box-sizing: border-box; font-size: 16px; }
+        .row { display: flex; gap: 10px; }
+        button { width: 100%; padding: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 1rem; }
+        .btn-save { background: var(--primary); color: white; margin-top: 10px; }
+        .btn-ref { background: #3498db; color: white; }
+        .status { text-align: center; margin-top: 10px; font-size: 0.9rem; }
+        .low { border-color: #3498db !important; }
+        .high { border-color: var(--error) !important; }
+        .normal { border-color: var(--primary) !important; }
+    </style>
+</head>
+<body>
+
+    <div id="setup-screen" class="card">
+        <h2>Referans Ayarları</h2>
+        <p style="font-size: 0.8rem; color: #aaa;">Önce kabul edilebilir aralıkları giriniz.</p>
+        <div class="row">
+            <input type="number" id="ref_s1m" placeholder="L1 Min">
+            <input type="number" id="ref_s1x" placeholder="L1 Max">
+        </div>
+        <div class="row">
+            <input type="number" id="ref_s2m" placeholder="L2 Min">
+            <input type="number" id="ref_s2x" placeholder="L2 Max">
+        </div>
+        <button class="btn-ref" onclick="saveRefs()">Ayarları Onayla</button><br><br>
+        <button class="btn-ref" onclick="fetchLastRefs()" style="background:#f39c12; margin-bottom:10px;">En Son Referansları Getir</button>
+    </div>
+
+    <div id="main-screen" class="card" style="display:none;">
+        <h2>Veri Girişi</h2>
+        <input type="text" id="seri" placeholder="Cihaz Seri No">
+        <input type="number" id="s1" placeholder="Seviye 1 Sonucu" oninput="checkValue(this, 's1')">
+        <input type="number" id="s2" placeholder="Seviye 2 Sonucu" oninput="checkValue(this, 's2')">
+        <button class="btn-save" onclick="sendData()">SONUÇLARI KAYDET</button>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5e7MeyiMfWHQtwnZQThzrNApVNg16M2ypeVL4ZeH_u1_7k5ofEDz2w5q2Mkp8SiWI1A/exec";
+        let refs = {};
+
+        function saveRefs() {
+            refs = {
+                s1m: parseFloat(document.getElementById('ref_s1m').value),
+                s1x: parseFloat(document.getElementById('ref_s1x').value),
+                s2m: parseFloat(document.getElementById('ref_s2m').value),
+                s2x: parseFloat(document.getElementById('ref_s2x').value)
+            };
+            
+            if (Object.values(refs).some(isNaN)) {
+                Swal.fire({ icon: 'warning', title: 'Eksik Bilgi', text: 'Lütfen tüm referans değerlerini doldurun!', confirmButtonColor: '#3498db' });
+                return;
+            }
+
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('main-screen').style.display = 'block';
+            
+            Swal.fire({ icon: 'success', title: 'Hazır!', text: 'Referanslar kaydedildi, veri girişine başlayabilirsiniz.', timer: 2000, showConfirmButton: false });
+        }
+
+        function checkValue(el, type) {
+            const val = parseFloat(el.value);
+            const min = type === 's1' ? refs.s1m : refs.s2m;
+            const max = type === 's1' ? refs.s1x : refs.s2x;
+            el.className = "";
+            if (val < min) el.classList.add('low');
+            else if (val > max) el.classList.add('high');
+            else if (!isNaN(val)) el.classList.add('normal');
+        }
+
+async function sendData() {
+            const seriInput = document.getElementById('seri');
+            const s1Input = document.getElementById('s1');
+            const s2Input = document.getElementById('s2');
+
+            const data = {
+                seri: seriInput.value,
+                s1: s1Input.value,
+                s2: s2Input.value,
+                ...refs
+            };
+
+            if(!data.seri || !data.s1 || !data.s2) {
+                Swal.fire({ icon: 'error', title: 'Hata', text: 'Eksik veri var!', confirmButtonColor: '#e74c3c' });
+                return;
+            }
+
+            Swal.fire({ 
+                title: 'Kaydediliyor...', 
+                allowOutsideClick: false, 
+                didOpen: () => { Swal.showLoading() } 
+            });
+
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(data)
+                });
+                
+                // Formu sıfırla (Mesajdan önce sıfırlamak daha iyidir)
+                seriInput.value = "";
+                s1Input.value = "";
+                s2Input.value = "";
+                s1Input.className = "";
+                s2Input.className = "";
+
+                Swal.fire({ 
+                    icon: 'success', 
+                    title: 'Başarılı!', 
+                    text: 'Veriler kaydedildi.', 
+                    timer: 1000, // Hızlandırmak için 1 saniyeye düşürdüm
+                    showConfirmButton: false,
+                    // KESİN ÇÖZÜM: Modal tamamen kapandığında odakla
+                    didClose: () => {
+                        seriInput.focus();
+                        // Mobil tarayıcılar için ikinci bir tetikleyici
+                        setTimeout(() => seriInput.focus(), 50);
+                    }
+                });
+
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: 'Bağlantı Hatası', text: 'Veri gönderilemedi!' });
+            }
+        }
+
+        async function fetchLastRefs() {
+            const btn = event.target;
+            const originalText = btn.innerText;
+            
+            btn.innerText = "Yükleniyor...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(SCRIPT_URL);
+                const data = await response.json();
+
+                document.getElementById('ref_s1m').value = data.s1m || "";
+                document.getElementById('ref_s1x').value = data.s1x || "";
+                document.getElementById('ref_s2m').value = data.s2m || "";
+                document.getElementById('ref_s2x').value = data.s2x || "";
+                
+                Swal.fire({ icon: 'success', title: 'Veriler Getirildi', text: 'Son kullanılan referanslar yüklendi.', timer: 1500 });
+
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: 'Hata', text: 'Referanslar alınamadı! Apps Script bağlantısını kontrol edin.' });
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Seri No yazıp Enter'a basınca S1'e geçer
+        document.getElementById('seri').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') document.getElementById('s1').focus();
+        });
+
+        // S1 yazıp Enter'a basınca S2'ye geçer
+        document.getElementById('s1').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') document.getElementById('s2').focus();
+        });
+
+        // S2 yazıp Enter'a basınca kaydet butonunu tetikler
+        document.getElementById('s2').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendData();
+        });
+
+    </script>
+</body>
+</html>
