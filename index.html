@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -180,58 +181,67 @@
             document.getElementById('seri').focus();
         }
 
-async function sendData() {
+        async function sendData() {
             const seriInput = document.getElementById('seri');
             const s1Input = document.getElementById('s1');
             const s2Input = document.getElementById('s2');
 
+            // Sayısal değerleri kontrol ve onay için değişkenlere atıyoruz
+            const v1 = parseFloat(s1Input.value);
+            const v2 = parseFloat(s2Input.value);
+
+            // Google Sheets'e gidecek veri paketi
             const data = {
                 seri: seriInput.value,
                 s1: s1Input.value,
                 s2: s2Input.value,
                 ...refs,
-                timestamp: new Date().toLocaleString('tr-TR') // Ne zaman kaydedildiğini eklemek önemli
+                timestamp: new Date().toLocaleString('tr-TR')
             };
-        
-            if(!data.seri || !data.s1 || !data.s2) {
-                Swal.fire({ icon: 'error', title: 'Hata', text: 'Eksik veri var!' });
+
+            // 1. Temel Boşluk Kontrolü
+            if (!data.seri || isNaN(v1) || isNaN(v2)) {
+                Swal.fire({ 
+                    icon: 'error', 
+                    title: 'Eksik Veri', 
+                    text: 'Lütfen cihaz seri numarasını ve her iki ölçüm sonucunu da giriniz.',
+                    background: '#1e1e1e',
+                    color: '#fff'
+                });
                 return;
             }
 
-            // Değerlerden biri min'den küçük VEYA max'tan büyükse
+            // 2. Kritik Aralık Kontrolü (Onay Mekanizması)
             const isS1Out = v1 < refs.s1m || v1 > refs.s1x;
             const isS2Out = v2 < refs.s2m || v2 > refs.s2x;
-        
+
             if (isS1Out || isS2Out) {
                 const result = await Swal.fire({
                     title: 'Emin misiniz?',
                     text: 'Girdiğiniz sonuçlar referans aralığı dışındadır. Yine de kaydetmek istiyor musunuz?',
                     icon: 'warning',
                     showCancelButton: true,
-                    confirmButtonColor: '#e74c3c', // Hata rengi (kırmızı)
-                    cancelButtonColor: '#3498db',
+                    confirmButtonColor: '#e74c3c', // Kırmızı (Hata/Onay)
+                    cancelButtonColor: '#3498db', // Mavi (Düzenle)
                     confirmButtonText: 'Evet, Kaydet',
                     cancelButtonText: 'Hayır, Düzenle',
                     background: '#1e1e1e',
                     color: '#fff'
                 });
-        
-                // Eğer kullanıcı "Hayır" (İptal) derse fonksiyonu burada durdur
+
+                // Kullanıcı "Hayır" derse işlemi durdur
                 if (!result.isConfirmed) {
                     return; 
                 }
             }
-            // -----------------------------------------
 
-    
-        
-            // --- YENİ EKLENEN KONTROL ---
+            // 3. Bağlantı Kontrolü (Offline Mode)
             if (!navigator.onLine) {
                 saveToOfflineQueue(data);
                 return;
             }
-            // ----------------------------
-        
+
+            // 4. Gönderim İşlemi (Online Mode)
             Swal.fire({ 
                 title: 'Kaydediliyor...', 
                 allowOutsideClick: false, 
@@ -245,7 +255,7 @@ async function sendData() {
                     body: JSON.stringify(data)
                 });
                 
-                // Formu sıfırla (Mesajdan önce sıfırlamak daha iyidir)
+                // Formu temizle
                 seriInput.value = "";
                 s1Input.value = "";
                 s2Input.value = "";
@@ -254,22 +264,25 @@ async function sendData() {
                 document.getElementById('s1-msg').innerText = "";
                 document.getElementById('s2-msg').innerText = "";
 
+                // Başarı Mesajı ve Odaklanma
                 Swal.fire({ 
                     icon: 'success', 
-                    title: 'Harika :)', 
-                    text: 'Veriler kaydedildi.', 
-                    timer: 1000, // Hızlandırmak için 1 saniyeye düşürdüm
+                    title: 'Kaydedildi', 
+                    text: 'Veriler başarıyla Google Sheets\'e aktarıldı.', 
+                    timer: 1000,
                     showConfirmButton: false,
-                    // KESİN ÇÖZÜM: Modal tamamen kapandığında odakla
+                    background: '#1e1e1e',
+                    color: '#fff',
                     didClose: () => {
                         seriInput.focus();
-                        // Mobil tarayıcılar için ikinci bir tetikleyici
                         setTimeout(() => seriInput.focus(), 50);
                     }
                 });
 
             } catch (e) {
-                Swal.fire({ icon: 'error', title: 'Bağlantı Hatası', text: 'Veri gönderilemedi!' });
+                // Beklenmedik bir ağ hatası olursa yerel kuyruğa at
+                console.error("Gönderim hatası:", e);
+                saveToOfflineQueue(data);
             }
         }
 
