@@ -197,6 +197,33 @@ async function sendData() {
                 Swal.fire({ icon: 'error', title: 'Hata', text: 'Eksik veri var!' });
                 return;
             }
+
+            // Değerlerden biri min'den küçük VEYA max'tan büyükse
+            const isS1Out = v1 < refs.s1m || v1 > refs.s1x;
+            const isS2Out = v2 < refs.s2m || v2 > refs.s2x;
+        
+            if (isS1Out || isS2Out) {
+                const result = await Swal.fire({
+                    title: 'Emin misiniz?',
+                    text: 'Girdiğiniz sonuçlar referans aralığı dışındadır. Yine de kaydetmek istiyor musunuz?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#e74c3c', // Hata rengi (kırmızı)
+                    cancelButtonColor: '#3498db',
+                    confirmButtonText: 'Evet, Kaydet',
+                    cancelButtonText: 'Hayır, Düzenle',
+                    background: '#1e1e1e',
+                    color: '#fff'
+                });
+        
+                // Eğer kullanıcı "Hayır" (İptal) derse fonksiyonu burada durdur
+                if (!result.isConfirmed) {
+                    return; 
+                }
+            }
+            // -----------------------------------------
+
+    
         
             // --- YENİ EKLENEN KONTROL ---
             if (!navigator.onLine) {
@@ -338,6 +365,7 @@ async function sendData() {
 </body>
 
 </html>
+
 
 
 
