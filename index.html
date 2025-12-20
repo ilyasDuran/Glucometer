@@ -89,6 +89,7 @@
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5e7MeyiMfWHQtwnZQThzrNApVNg16M2ypeVL4ZeH_u1_7k5ofEDz2w5q2Mkp8SiWI1A/exec";
         let refs = {};
+        const seriInput = document.getElementById('seri');
         let html5QrCode;
 
         window.addEventListener('load', () => {
@@ -121,8 +122,18 @@
             localStorage.setItem('gluco_refs', JSON.stringify(refs));
             document.getElementById('setup-screen').style.display = 'none';
             document.getElementById('main-screen').style.display = 'block';
-            document.getElementById('seri').focus();
-            Swal.fire({ icon: 'success', title: 'Hazır!', text: 'Referanslar kaydedildi.', timer: 2000, showConfirmButton: false });
+
+            Swal.fire({ 
+                icon: 'success', 
+                title: 'Hazır!', 
+                text: 'Referanslar kaydedildi.', 
+                timer: 2000, 
+                showConfirmButton: false,
+                didClose: () => {
+                    seriInput.focus();
+                    setTimeout(() => seriInput.focus(), 50);
+                }
+            });
         }
 
         function updateCounter(reset = false) {
@@ -171,7 +182,7 @@
         }
 
         async function sendData() {
-            const seriInput = document.getElementById('seri');
+            
             const s1Input = document.getElementById('s1');
             const s2Input = document.getElementById('s2');
             const v1 = parseFloat(s1Input.value);
@@ -185,7 +196,18 @@
             }
 
             if (v1 < refs.s1m || v1 > refs.s1x || v2 < refs.s2m || v2 > refs.s2x) {
-                const result = await Swal.fire({ title: 'Emin misiniz?', text: 'Referans dışı veri!', icon: 'warning', showCancelButton: true, confirmButtonText: 'Evet, Kaydet' });
+                const result = await Swal.fire({ 
+                    title: 'Emin misiniz?',
+                    text: 'Girdiğiniz sonuçlar referans aralığı dışındadır. Yine de kaydetmek istiyor musunuz?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#e74c3c', // Kırmızı (Hata/Onay)
+                    cancelButtonColor: '#3498db', // Mavi (Düzenle)
+                    confirmButtonText: 'Evet, Kaydet',
+                    cancelButtonText: 'Hayır, Düzenle',
+                    background: '#1e1e1e',
+                    color: '#fff'
+                });
                 if (!result.isConfirmed) return;
             }
 
@@ -197,8 +219,19 @@
                 clearForm();
                 updateCounter();
                 updatePendingStatus();
-                Swal.fire({ icon: 'success', title: 'Kaydedildi', timer: 1000, showConfirmButton: false });
-                seriInput.focus();
+                Swal.fire({ 
+                    icon: 'success', 
+                    title: 'Kaydedildi', 
+                    text: 'Veriler başarıyla Google Sheets\'e aktarıldı.', 
+                    timer: 1000,
+                    showConfirmButton: false,
+                    background: '#1e1e1e',
+                    color: '#fff',
+                    didClose: () => {
+                        seriInput.focus();
+                        setTimeout(() => seriInput.focus(), 50);
+                    }
+                });
             } catch (e) { saveToOfflineQueue(data); }
         }
 
@@ -211,11 +244,20 @@
             let queue = JSON.parse(localStorage.getItem('pending_sync') || '[]');
             queue.push(data);
             localStorage.setItem('pending_sync', JSON.stringify(queue));
-            Swal.fire({ icon: 'info', title: 'Çevrimdışı Kaydedildi', timer: 2000 });
+            Swal.fire({ 
+                icon: 'info', 
+                title: 'Çevrimdışı Kaydedildi', 
+                text: 'İnternetiniz şu an kapalı. Veri cihaza kaydedildi, internet gelince otomatik gönderilecek.',
+                timer: 3000,
+                didClose: () => {
+                    seriInput.focus();
+                    setTimeout(() => seriInput.focus(), 50);
+                }
+            });
             updateCounter();
             updatePendingStatus();
             clearForm();
-            document.getElementById('seri').focus();
+            seriInput.focus();
         }
 
         async function syncOfflineData() {
@@ -238,7 +280,7 @@
             try {
                 await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
                 (text) => {
-                    document.getElementById('seri').value = text;
+                    seriInput.value = text;
                     stopScan();
                     document.getElementById('s1').focus();
                 }, () => {});
@@ -275,7 +317,7 @@
         }
 
         // Enter Navigasyonu
-        document.getElementById('seri').addEventListener('keypress', e => { if(e.key === 'Enter') document.getElementById('s1').focus(); });
+        seriInput.addEventListener('keypress', e => { if(e.key === 'Enter') document.getElementById('s1').focus(); });
         document.getElementById('s1').addEventListener('keypress', e => { if(e.key === 'Enter') document.getElementById('s2').focus(); });
         document.getElementById('s2').addEventListener('keypress', e => { if(e.key === 'Enter') sendData(); });
 
