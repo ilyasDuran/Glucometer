@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -11,8 +10,11 @@
     <title>GlukoMeter IQC</title>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-dark@5/dark.css">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    
     <link rel="apple-touch-icon" href="Glucometer.png">
-    <link rel="icon" type="image/png" href="Glucometer.png"><link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="Glucometer.png">
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#121212">
     
     <style>
@@ -29,6 +31,11 @@
         .low { border-color: #3498db !important; }
         .high { border-color: var(--error) !important; }
         .normal { border-color: var(--primary) !important; }
+
+        /* Kamera Butonu ve Vizör Stili */
+        .seri-container { position: relative; display: flex; align-items: center; }
+        .btn-scan { position: absolute; right: 8px; background: #444; color: white; width: 40px; height: 40px; padding: 0; display: flex; justify-content: center; align-items: center; border-radius: 6px; }
+        #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; }
     </style>
 </head>
 <body>
@@ -51,11 +58,20 @@
     <div id="main-screen" class="card" style="display:none;">
         <h2>Veri Girişi</h2>
 
-        <div id="counter-box" style="text-align: right; font-size: 0.8rem; color: var(--primary); margin-bottom: 10px; font-weight: bold;">
-            Bugün Toplam: <span id="daily-count">0</span> Kayıt
+        <div id="counter-box" style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 10px; font-weight: bold;">
+            <span style="color: #f39c12;" id="pending-status"></span>
+            <span style="color: var(--primary);">Bugün Toplam: <span id="daily-count">0</span> Kayıt Yaptınız</span>
         </div>
 
-        <input type="text" id="seri" placeholder="Cihaz Seri No">
+        <div id="reader-wrapper" style="display:none; margin-bottom: 15px;">
+            <div id="reader"></div>
+            <button onclick="stopScan()" style="background: var(--error); margin-top: 10px; padding: 10px;">Kamerayı Kapat</button>
+        </div>
+
+        <div class="seri-container">
+            <input type="text" id="seri" placeholder="Cihaz Seri No">
+            <button class="btn-scan" onclick="startScan()">📷</button>
+        </div>
         
         <input type="number" id="s1" placeholder="Seviye 1 Sonucu" oninput="checkValue(this, 's1')">
         <div id="s1-msg" style="font-size: 0.8rem; margin-bottom: 10px; transition: 0.3s;"></div>
@@ -71,13 +87,12 @@
     </div>
 
     <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5e7MeyiMfWHQtwnZQThzrNApVNg16M2ypeVL4ZeH_u1_7k5ofEDz2w5q2Mkp8SiWI1A/exec";
+        let refs = {};
+        let html5QrCode;
 
-        // Sayfa her yüklendiğinde çalışacak olan kod
         window.addEventListener('load', () => {
-            // 1. Bekleyen verileri senkronize et
             syncOfflineData();
-        
-            // 2. Referansları yükle
             const savedRefs = localStorage.getItem('gluco_refs');
             if (savedRefs) {
                 refs = JSON.parse(savedRefs);
@@ -85,18 +100,12 @@
                 document.getElementById('ref_s1x').value = refs.s1x;
                 document.getElementById('ref_s2m').value = refs.s2m;
                 document.getElementById('ref_s2x').value = refs.s2x;
-        
                 document.getElementById('setup-screen').style.display = 'none';
                 document.getElementById('main-screen').style.display = 'block';
-                console.log("Kayıtlı referanslar yüklendi.");
             }
-
             displayCounter();
-
+            updatePendingStatus();
         });
-        
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5e7MeyiMfWHQtwnZQThzrNApVNg16M2ypeVL4ZeH_u1_7k5ofEDz2w5q2Mkp8SiWI1A/exec";
-        let refs = {};
 
         function saveRefs() {
             refs = {
@@ -105,327 +114,172 @@
                 s2m: parseFloat(document.getElementById('ref_s2m').value),
                 s2x: parseFloat(document.getElementById('ref_s2x').value)
             };
-            
             if (Object.values(refs).some(isNaN)) {
                 Swal.fire({ icon: 'warning', title: 'Eksik Bilgi', text: 'Lütfen tüm referans değerlerini doldurun!', confirmButtonColor: '#3498db' });
                 return;
             }
-
             localStorage.setItem('gluco_refs', JSON.stringify(refs));
-
             document.getElementById('setup-screen').style.display = 'none';
             document.getElementById('main-screen').style.display = 'block';
-            
-            Swal.fire({ icon: 'success', title: 'Hazır!', text: 'Referanslar kaydedildi, veri girişine başlayabilirsiniz.', timer: 2000, showConfirmButton: false });
+            document.getElementById('seri').focus();
+            Swal.fire({ icon: 'success', title: 'Hazır!', text: 'Referanslar kaydedildi.', timer: 2000, showConfirmButton: false });
         }
 
-
-        // Sayacı güncelleyen ve ekrana yazan fonksiyon
         function updateCounter(reset = false) {
-            const today = new Date().toDateString(); // Bugünün tarihi (Örn: "Sat May 20 2023")
+            const today = new Date().toDateString();
             const lastDate = localStorage.getItem('counter_date');
             let count = parseInt(localStorage.getItem('daily_count') || '0');
-
-            // Eğer tarih değişmişse sayacı sıfırla
             if (lastDate !== today || reset) {
                 count = 0;
                 localStorage.setItem('counter_date', today);
             } else {
                 count++;
             }
-
             localStorage.setItem('daily_count', count);
             document.getElementById('daily-count').innerText = count;
         }
 
-        // Sadece ekranda göstermek için (sayıyı artırmadan)
         function displayCounter() {
             const today = new Date().toDateString();
-            const lastDate = localStorage.getItem('counter_date');
-            
-            if (lastDate !== today) {
+            if (localStorage.getItem('counter_date') !== today) {
                 localStorage.setItem('daily_count', '0');
                 localStorage.setItem('counter_date', today);
             }
-            
             document.getElementById('daily-count').innerText = localStorage.getItem('daily_count') || '0';
+        }
+
+        function updatePendingStatus() {
+            const queue = JSON.parse(localStorage.getItem('pending_sync') || '[]');
+            const statusEl = document.getElementById('pending-status');
+            statusEl.innerText = queue.length > 0 ? `⏳ ${queue.length} Bekleyen` : "";
         }
 
         function checkValue(el, type) {
             const val = parseFloat(el.value);
-            const msgEl = document.getElementById(type + '-msg'); // s1-msg veya s2-msg
-            
-            // Referans değerlerini al
+            const msgEl = document.getElementById(type + '-msg');
             const min = type === 's1' ? refs.s1m : refs.s2m;
             const max = type === 's1' ? refs.s1x : refs.s2x;
-            
-            // Sıfırlama
-            el.className = "";
-            msgEl.innerText = "";
-            
+            el.className = ""; msgEl.innerText = "";
             if (isNaN(val)) return;
-        
             if (val < min) {
-                el.classList.add('low');
-                msgEl.innerText = "⚠️ Düşük Değer (Min: " + min + ")";
-                msgEl.style.color = "#3498db";
+                el.classList.add('low'); msgEl.innerText = "⚠️ Düşük (Min: " + min + ")"; msgEl.style.color = "#3498db";
             } else if (val > max) {
-                el.classList.add('high');
-                msgEl.innerText = "⚠️ Yüksek Değer (Max: " + max + ")";
-                msgEl.style.color = "#e74c3c";
+                el.classList.add('high'); msgEl.innerText = "⚠️ Yüksek (Max: " + max + ")"; msgEl.style.color = "#e74c3c";
             } else {
-                el.classList.add('normal');
-                msgEl.innerText = "✅ Değer Uygun";
-                msgEl.style.color = "#2ecc71";
+                el.classList.add('normal'); msgEl.innerText = "✅ Uygun"; msgEl.style.color = "#2ecc71";
             }
-        }
-
-        // Ayarlar ekranına geri dönme fonksiyonu
-        function backToSetup() {
-            document.getElementById('main-screen').style.display = 'none';
-            document.getElementById('setup-screen').style.display = 'block';
-                
-            // Opsiyonel: Girişleri temizle
-            document.getElementById('s1').value = "";
-            document.getElementById('s2').value = "";
-            document.getElementById('s1-msg').innerText = "";
-            document.getElementById('s2-msg').innerText = "";
-          }
-
-        // İnternet yoksa veriyi tarayıcı hafızasına (kuyruğa) ekleyen fonksiyon
-        function saveToOfflineQueue(data) {
-            // Mevcut bekleyen listesini al, yoksa boş liste oluştur
-            let queue = JSON.parse(localStorage.getItem('pending_sync') || '[]');
-            
-            // Yeni veriyi listeye ekle
-            queue.push(data);
-            
-            // Güncel listeyi hafızaya geri yaz
-            localStorage.setItem('pending_sync', JSON.stringify(queue));
-            
-            Swal.fire({
-                icon: 'info',
-                title: 'Bağlantı Yok',
-                text: 'İnternetiniz şu an kapalı. Veri cihaza kaydedildi, internet gelince otomatik gönderilecek.',
-                timer: 3000
-            });
-
-            updateCounter();
-            
-            // Formu temizle (Kullanıcı yeni cihaz girebilsin)
-            document.getElementById('seri').value = "";
-            document.getElementById('s1').value = "";
-            document.getElementById('s2').value = "";
-            document.getElementById('s1').className = "";
-            document.getElementById('s2').className = "";
-            document.getElementById('s1-msg').innerText = "";
-            document.getElementById('s2-msg').innerText = "";
-            document.getElementById('seri').focus();
         }
 
         async function sendData() {
             const seriInput = document.getElementById('seri');
             const s1Input = document.getElementById('s1');
             const s2Input = document.getElementById('s2');
-
-            // Sayısal değerleri kontrol ve onay için değişkenlere atıyoruz
             const v1 = parseFloat(s1Input.value);
             const v2 = parseFloat(s2Input.value);
 
-            // Google Sheets'e gidecek veri paketi
-            const data = {
-                seri: seriInput.value,
-                s1: s1Input.value,
-                s2: s2Input.value,
-                ...refs,
-                timestamp: new Date().toLocaleString('tr-TR')
-            };
+            const data = { seri: seriInput.value, s1: s1Input.value, s2: s2Input.value, ...refs, timestamp: new Date().toLocaleString('tr-TR') };
 
-            // 1. Temel Boşluk Kontrolü
             if (!data.seri || isNaN(v1) || isNaN(v2)) {
-                Swal.fire({ 
-                    icon: 'error', 
-                    title: 'Eksik Veri', 
-                    text: 'Lütfen cihaz seri numarasını ve her iki ölçüm sonucunu da giriniz.',
-                    background: '#1e1e1e',
-                    color: '#fff'
-                });
+                Swal.fire({ icon: 'error', title: 'Eksik Veri', text: 'Tüm alanları doldurun.' });
                 return;
             }
 
-            // 2. Kritik Aralık Kontrolü (Onay Mekanizması)
-            const isS1Out = v1 < refs.s1m || v1 > refs.s1x;
-            const isS2Out = v2 < refs.s2m || v2 > refs.s2x;
-
-            if (isS1Out || isS2Out) {
-                const result = await Swal.fire({
-                    title: 'Emin misiniz?',
-                    text: 'Girdiğiniz sonuçlar referans aralığı dışındadır. Yine de kaydetmek istiyor musunuz?',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#e74c3c', // Kırmızı (Hata/Onay)
-                    cancelButtonColor: '#3498db', // Mavi (Düzenle)
-                    confirmButtonText: 'Evet, Kaydet',
-                    cancelButtonText: 'Hayır, Düzenle',
-                    background: '#1e1e1e',
-                    color: '#fff'
-                });
-
-                // Kullanıcı "Hayır" derse işlemi durdur
-                if (!result.isConfirmed) {
-                    return; 
-                }
+            if (v1 < refs.s1m || v1 > refs.s1x || v2 < refs.s2m || v2 > refs.s2x) {
+                const result = await Swal.fire({ title: 'Emin misiniz?', text: 'Referans dışı veri!', icon: 'warning', showCancelButton: true, confirmButtonText: 'Evet, Kaydet' });
+                if (!result.isConfirmed) return;
             }
 
-            // 3. Bağlantı Kontrolü (Offline Mode)
-            if (!navigator.onLine) {
-                saveToOfflineQueue(data);
-                return;
-            }
+            if (!navigator.onLine) { saveToOfflineQueue(data); return; }
 
-            // 4. Gönderim İşlemi (Online Mode)
-            Swal.fire({ 
-                title: 'Kaydediliyor...', 
-                allowOutsideClick: false, 
-                didOpen: () => { Swal.showLoading() } 
-            });
-
+            Swal.fire({ title: 'Kaydediliyor...', didOpen: () => { Swal.showLoading() } });
             try {
-                await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: JSON.stringify(data)
-                });
-                
-                // Formu temizle
-                seriInput.value = "";
-                s1Input.value = "";
-                s2Input.value = "";
-                s1Input.className = "";
-                s2Input.className = "";
-                document.getElementById('s1-msg').innerText = "";
-                document.getElementById('s2-msg').innerText = "";
-
+                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
+                clearForm();
                 updateCounter();
+                updatePendingStatus();
+                Swal.fire({ icon: 'success', title: 'Kaydedildi', timer: 1000, showConfirmButton: false });
+                seriInput.focus();
+            } catch (e) { saveToOfflineQueue(data); }
+        }
 
-                // Başarı Mesajı ve Odaklanma
-                Swal.fire({ 
-                    icon: 'success', 
-                    title: 'Kaydedildi', 
-                    text: 'Veriler başarıyla Google Sheets\'e aktarıldı.', 
-                    timer: 1000,
-                    showConfirmButton: false,
-                    background: '#1e1e1e',
-                    color: '#fff',
-                    didClose: () => {
-                        seriInput.focus();
-                        setTimeout(() => seriInput.focus(), 50);
-                    }
-                });
+        function clearForm() {
+            ['seri', 's1', 's2'].forEach(id => document.getElementById(id).value = "");
+            ['s1', 's2'].forEach(id => { document.getElementById(id).className = ""; document.getElementById(id+'-msg').innerText = ""; });
+        }
 
-            } catch (e) {
-                // Beklenmedik bir ağ hatası olursa yerel kuyruğa at
-                console.error("Gönderim hatası:", e);
-                saveToOfflineQueue(data);
+        function saveToOfflineQueue(data) {
+            let queue = JSON.parse(localStorage.getItem('pending_sync') || '[]');
+            queue.push(data);
+            localStorage.setItem('pending_sync', JSON.stringify(queue));
+            Swal.fire({ icon: 'info', title: 'Çevrimdışı Kaydedildi', timer: 2000 });
+            updateCounter();
+            updatePendingStatus();
+            clearForm();
+            document.getElementById('seri').focus();
+        }
+
+        async function syncOfflineData() {
+            let queue = JSON.parse(localStorage.getItem('pending_sync') || '[]');
+            if (queue.length === 0) return;
+            for (let item of queue) {
+                try { await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(item) }); } 
+                catch (e) { return; }
             }
+            localStorage.removeItem('pending_sync');
+            updatePendingStatus();
+            Swal.fire({ icon: 'success', title: 'Eşitleme Tamam', toast: true, position: 'top-end', timer: 3000 });
+        }
+
+        // --- KAMERA FONKSİYONLARI ---
+        async function startScan() {
+            const wrapper = document.getElementById('reader-wrapper');
+            wrapper.style.display = 'block';
+            html5QrCode = new Html5Qrcode("reader");
+            try {
+                await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
+                (text) => {
+                    document.getElementById('seri').value = text;
+                    stopScan();
+                    document.getElementById('s1').focus();
+                }, () => {});
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'Kamera Hatası', text: 'İzin verilmedi veya HTTPS değil.' });
+                wrapper.style.display = 'none';
+            }
+        }
+
+        function stopScan() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => { document.getElementById('reader-wrapper').style.display = 'none'; });
+            }
+        }
+
+        function backToSetup() {
+            document.getElementById('main-screen').style.display = 'none';
+            document.getElementById('setup-screen').style.display = 'block';
         }
 
         async function fetchLastRefs(e) {
             const btn = e.currentTarget;
-            const originalText = btn.innerText;
-            
-            btn.innerText = "Yükleniyor...";
-            btn.disabled = true;
-
+            btn.innerText = "Yükleniyor..."; btn.disabled = true;
             try {
-                const response = await fetch(SCRIPT_URL);
-                const data = await response.json();
-
-                document.getElementById('ref_s1m').value = data.s1m || "";
-                document.getElementById('ref_s1x').value = data.s1x || "";
-                document.getElementById('ref_s2m').value = data.s2m || "";
-                document.getElementById('ref_s2x').value = data.s2x || "";
-                
-                Swal.fire({ icon: 'success', title: 'Veriler Getirildi', text: 'Son kullanılan referanslar yüklendi.', timer: 1500 });
-
-            } catch (e) {
-                Swal.fire({ icon: 'error', title: 'Hata', text: 'Referanslar alınamadı! Apps Script bağlantısını kontrol edin.' });
-            } finally {
-                btn.innerText = originalText;
-                btn.disabled = false;
-            }
+                const res = await fetch(SCRIPT_URL);
+                const d = await res.json();
+                document.getElementById('ref_s1m').value = d.s1m || "";
+                document.getElementById('ref_s1x').value = d.s1x || "";
+                document.getElementById('ref_s2m').value = d.s2m || "";
+                document.getElementById('ref_s2x').value = d.s2x || "";
+                Swal.fire({ icon: 'success', title: 'Güncellendi', timer: 1000 });
+            } catch (e) { Swal.fire({ icon: 'error', title: 'Hata' }); }
+            finally { btn.innerText = "En Son Referansları Getir"; btn.disabled = false; }
         }
 
-        // Seri No yazıp Enter'a basınca S1'e geçer
-        document.getElementById('seri').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') document.getElementById('s1').focus();
-        });
+        // Enter Navigasyonu
+        document.getElementById('seri').addEventListener('keypress', e => { if(e.key === 'Enter') document.getElementById('s1').focus(); });
+        document.getElementById('s1').addEventListener('keypress', e => { if(e.key === 'Enter') document.getElementById('s2').focus(); });
+        document.getElementById('s2').addEventListener('keypress', e => { if(e.key === 'Enter') sendData(); });
 
-        // S1 yazıp Enter'a basınca S2'ye geçer
-        document.getElementById('s1').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') document.getElementById('s2').focus();
-        });
-
-        // S2 yazıp Enter'a basınca kaydet butonunu tetikler
-        document.getElementById('s2').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') sendData();
-        });
-
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-              navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('PWA Hazır!', reg))
-                .catch(err => console.log('Hata:', err));
-            });
-          }
-
-        // Hafızada bekleyen verileri Google Sheets'e gönderen fonksiyon
-        async function syncOfflineData() {
-            let queue = JSON.parse(localStorage.getItem('pending_sync') || '[]');
-            
-            if (queue.length === 0) return; // Bekleyen veri yoksa işlem yapma
-        
-            console.log("İnternet geldi, " + queue.length + " kayıt gönderiliyor...");
-            
-            for (let i = 0; i < queue.length; i++) {
-                try {
-                    await fetch(SCRIPT_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        body: JSON.stringify(queue[i])
-                    });
-                } catch (e) {
-                    console.log("Gönderim başarısız, bir sonraki denemede tekrar yapılacak.");
-                    return; // Hata alırsak döngüden çık (internet tekrar gitmiş olabilir)
-                }
-            }
-        
-            // Tüm liste başarıyla bittiyse hafızayı temizle
-            localStorage.removeItem('pending_sync');
-            
-            Swal.fire({
-                icon: 'success',
-                title: 'Eşitleme Başarılı',
-                text: 'Çevrimdışı kaydedilen veriler başarıyla aktarıldı.',
-                toast: true,
-                position: 'top-end',
-                timer: 3000,
-                showConfirmButton: false
-            });
-        }
-        
-        // Olay dinleyicileri: İnternet geldiğinde ve uygulama açıldığında çalışır
         window.addEventListener('online', syncOfflineData);
-        
-
     </script>
 </body>
-
 </html>
-
-
-
-
-
-
-
