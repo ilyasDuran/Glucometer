@@ -50,6 +50,11 @@
 
     <div id="main-screen" class="card" style="display:none;">
         <h2>Veri Girişi</h2>
+
+        <div id="counter-box" style="text-align: right; font-size: 0.8rem; color: var(--primary); margin-bottom: 10px; font-weight: bold;">
+            Bugün Toplam: <span id="daily-count">0</span> Kayıt
+        </div>
+
         <input type="text" id="seri" placeholder="Cihaz Seri No">
         
         <input type="number" id="s1" placeholder="Seviye 1 Sonucu" oninput="checkValue(this, 's1')">
@@ -85,6 +90,9 @@
                 document.getElementById('main-screen').style.display = 'block';
                 console.log("Kayıtlı referanslar yüklendi.");
             }
+
+            displayCounter();
+
         });
         
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5e7MeyiMfWHQtwnZQThzrNApVNg16M2ypeVL4ZeH_u1_7k5ofEDz2w5q2Mkp8SiWI1A/exec";
@@ -109,6 +117,38 @@
             document.getElementById('main-screen').style.display = 'block';
             
             Swal.fire({ icon: 'success', title: 'Hazır!', text: 'Referanslar kaydedildi, veri girişine başlayabilirsiniz.', timer: 2000, showConfirmButton: false });
+        }
+
+
+        // Sayacı güncelleyen ve ekrana yazan fonksiyon
+        function updateCounter(reset = false) {
+            const today = new Date().toDateString(); // Bugünün tarihi (Örn: "Sat May 20 2023")
+            const lastDate = localStorage.getItem('counter_date');
+            let count = parseInt(localStorage.getItem('daily_count') || '0');
+
+            // Eğer tarih değişmişse sayacı sıfırla
+            if (lastDate !== today || reset) {
+                count = 0;
+                localStorage.setItem('counter_date', today);
+            } else {
+                count++;
+            }
+
+            localStorage.setItem('daily_count', count);
+            document.getElementById('daily-count').innerText = count;
+        }
+
+        // Sadece ekranda göstermek için (sayıyı artırmadan)
+        function displayCounter() {
+            const today = new Date().toDateString();
+            const lastDate = localStorage.getItem('counter_date');
+            
+            if (lastDate !== today) {
+                localStorage.setItem('daily_count', '0');
+                localStorage.setItem('counter_date', today);
+            }
+            
+            document.getElementById('daily-count').innerText = localStorage.getItem('daily_count') || '0';
         }
 
         function checkValue(el, type) {
@@ -169,6 +209,8 @@
                 text: 'İnternetiniz şu an kapalı. Veri cihaza kaydedildi, internet gelince otomatik gönderilecek.',
                 timer: 3000
             });
+
+            updateCounter();
             
             // Formu temizle (Kullanıcı yeni cihaz girebilsin)
             document.getElementById('seri').value = "";
@@ -263,6 +305,8 @@
                 s2Input.className = "";
                 document.getElementById('s1-msg').innerText = "";
                 document.getElementById('s2-msg').innerText = "";
+
+                updateCounter();
 
                 // Başarı Mesajı ve Odaklanma
                 Swal.fire({ 
