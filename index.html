@@ -35,7 +35,29 @@
         /* Kamera Butonu ve Vizör Stili */
         .seri-container { position: relative; display: flex; align-items: center; }
         .btn-scan { position: absolute; right: 8px; background: #444; color: white; width: 40px; height: 40px; padding: 0; display: flex; justify-content: center; align-items: center; border-radius: 6px; }
-        #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; }
+        #reader { 
+            width: 100%; 
+            border-radius: 10px; 
+            overflow: hidden; 
+            background: #000;
+            position: relative; 
+            border: 2px solid #444; 
+        }
+        #reader::after {
+            content: "";
+            position: absolute;
+            top: 50%; 
+            left: 50%;
+            width: 70%; /* Genişlik */
+            height: 40%; /* Yükseklik */
+            border: 2px solid var(--primary);
+            transform: translate(-50%, -50%);
+            border-radius: 12px;
+            /* Çerçevenin dışını hafifçe karartarak odaklanmayı artırır */
+            box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); 
+            pointer-events: none; /* Tıklamaları engellemez */
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -106,7 +128,7 @@
         const s1Input = document.getElementById('s1');
         const s2Input = document.getElementById('s2');
         let html5QrCode;
-        const beepAudio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+        const beepAudio = new Audio('./beep.ogg');
 
         window.addEventListener('load', () => {
             syncOfflineData();
