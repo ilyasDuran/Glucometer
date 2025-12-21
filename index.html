@@ -73,10 +73,23 @@
             <button class="btn-scan" onclick="startScan()">📷</button>
         </div>
         
-        <input type="number" id="s1" placeholder="Seviye 1 Sonucu" oninput="checkValue(this, 's1')">
+
+        <input type="number" 
+            id="s1" 
+            placeholder="Seviye 1 Sonucu" 
+            oninput="checkValue(this, 's1')" 
+            onkeydown="blockNonNumbers(event)" 
+            min="0" 
+            inputmode="numeric">
         <div id="s1-msg" style="font-size: 0.8rem; margin-bottom: 10px; transition: 0.3s;"></div>
-    
-        <input type="number" id="s2" placeholder="Seviye 2 Sonucu" oninput="checkValue(this, 's2')">
+
+        <input type="number" 
+            id="s2" 
+            placeholder="Seviye 2 Sonucu" 
+            oninput="checkValue(this, 's2')" 
+            onkeydown="blockNonNumbers(event)" 
+            min="0" 
+            inputmode="numeric">
         <div id="s2-msg" style="font-size: 0.8rem; margin-bottom: 10px; transition: 0.3s;"></div>
         
         <button class="btn-save" onclick="sendData()">SONUÇLARI KAYDET</button>
@@ -90,6 +103,8 @@
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5e7MeyiMfWHQtwnZQThzrNApVNg16M2ypeVL4ZeH_u1_7k5ofEDz2w5q2Mkp8SiWI1A/exec";
         let refs = {};
         const seriInput = document.getElementById('seri');
+        const s1Input = document.getElementById('s1');
+        const s2Input = document.getElementById('s2');
         let html5QrCode;
 
         window.addEventListener('load', () => {
@@ -181,10 +196,18 @@
             }
         }
 
+        function blockNonNumbers(e) {
+            // İzin verilen tuşlar: Backspace, Delete, Tab, Escape, Enter ve Ok tuşları
+            const allowedKeys = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight'];
+            
+            // Eğer basılan tuş listede yoksa ve bir rakam değilse işlemi engelle
+            if (!allowedKeys.includes(e.key) && (e.key < '0' || e.key > '9')) {
+                e.preventDefault();
+            }
+        }
+
         async function sendData() {
             
-            const s1Input = document.getElementById('s1');
-            const s2Input = document.getElementById('s2');
             const v1 = parseFloat(s1Input.value);
             const v2 = parseFloat(s2Input.value);
 
@@ -284,9 +307,15 @@
                     const sonOnAlti = text.trim().slice(-16);                    
                     // Input alanına sadece bu 16 haneyi yazdırıyoruz
                     seriInput.value = sonOnAlti;
+                    // Titreşim desteği
+                    if (navigator.vibrate) navigator.vibrate(50);
 
                     stopScan();
-                    document.getElementById('s1').focus();
+                    // Küçük bir gecikme ile odaklanma (mobil tarayıcı uyumu için)
+                    setTimeout(() => {
+                        s1Input.focus();
+                        s1Input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 300);
                 }, () => {});
             } catch (err) {
                 Swal.fire({ icon: 'error', title: 'Kamera Hatası', text: 'İzin verilmedi veya HTTPS değil.' });
@@ -320,10 +349,20 @@
             finally { btn.innerText = "En Son Referansları Getir"; btn.disabled = false; }
         }
 
+        // Yapıştırma işlemini kontrol et (Sadece rakamsa izin ver)
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('paste', e => {
+                const pasteData = e.clipboardData.getData('text');
+                if (!/^\d+$/.test(pasteData)) {
+                    e.preventDefault();
+                }
+            });
+        });
+
         // Enter Navigasyonu
-        seriInput.addEventListener('keypress', e => { if(e.key === 'Enter') document.getElementById('s1').focus(); });
-        document.getElementById('s1').addEventListener('keypress', e => { if(e.key === 'Enter') document.getElementById('s2').focus(); });
-        document.getElementById('s2').addEventListener('keypress', e => { if(e.key === 'Enter') sendData(); });
+        seriInput.addEventListener('keypress', e => { if(e.key === 'Enter') s1Input.focus(); });
+        s1Input.addEventListener('keypress', e => { if(e.key === 'Enter') s2Input.focus(); });
+        s2Input.addEventListener('keypress', e => { if(e.key === 'Enter') sendData(); });
 
         window.addEventListener('online', syncOfflineData);
     </script>
