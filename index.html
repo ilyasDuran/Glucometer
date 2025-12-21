@@ -221,8 +221,8 @@
                 updatePendingStatus();
                 Swal.fire({ 
                     icon: 'success', 
-                    title: 'Kaydedildi', 
-                    text: 'Veriler başarıyla Google Sheets\'e aktarıldı.', 
+                    title: 'Harika', 
+                    text: 'Veriler başarıyla Arşive aktarıldı.', 
                     timer: 1000,
                     showConfirmButton: false,
                     background: '#1e1e1e',
@@ -280,7 +280,11 @@
             try {
                 await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
                 (text) => {
-                    seriInput.value = text;
+                    // Metnin son 16 karakterini alıyoruz. Boşlukları temizleyerek.
+                    const sonOnAlti = text.trim().slice(-16);                    
+                    // Input alanına sadece bu 16 haneyi yazdırıyoruz
+                    seriInput.value = sonOnAlti;
+
                     stopScan();
                     document.getElementById('s1').focus();
                 }, () => {});
