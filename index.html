@@ -207,25 +207,32 @@
         }
 
         async function sendData() {
-            
             const v1 = parseFloat(s1Input.value);
             const v2 = parseFloat(s2Input.value);
 
-            const data = { seri: seriInput.value, s1: s1Input.value, s2: s2Input.value, ...refs, timestamp: new Date().toLocaleString('tr-TR') };
+            const data = { 
+                seri: seriInput.value, 
+                s1: s1Input.value, 
+                s2: s2Input.value, 
+                ...refs, 
+                timestamp: new Date().toLocaleString('tr-TR') 
+            };
 
+            // 1. Temel Giriş Kontrolleri
             if (!data.seri || isNaN(v1) || isNaN(v2)) {
                 Swal.fire({ icon: 'error', title: 'Eksik Veri', text: 'Tüm alanları doldurun.' });
                 return;
             }
 
+            // 2. Referans Aralığı Kontrolü ve Onay Mekanizması
             if (v1 < refs.s1m || v1 > refs.s1x || v2 < refs.s2m || v2 > refs.s2x) {
                 const result = await Swal.fire({ 
                     title: 'Emin misiniz?',
                     text: 'Girdiğiniz sonuçlar referans aralığı dışındadır. Yine de kaydetmek istiyor musunuz?',
                     icon: 'warning',
                     showCancelButton: true,
-                    confirmButtonColor: '#e74c3c', // Kırmızı (Hata/Onay)
-                    cancelButtonColor: '#3498db', // Mavi (Düzenle)
+                    confirmButtonColor: '#e74c3c',
+                    cancelButtonColor: '#3498db',
                     confirmButtonText: 'Evet, Kaydet',
                     cancelButtonText: 'Hayır, Düzenle',
                     background: '#1e1e1e',
@@ -234,14 +241,39 @@
                 if (!result.isConfirmed) return;
             }
 
-            if (!navigator.onLine) { saveToOfflineQueue(data); return; }
+            // 3. İnternet Yoksa Direkt Çevrimdışı Kuyruğa At
+            if (!navigator.onLine) { 
+                saveToOfflineQueue(data); 
+                return; 
+            }
 
-            Swal.fire({ title: 'Kaydediliyor...', didOpen: () => { Swal.showLoading() } });
+            // 4. Zaman Aşımı Kontrolü (AbortController)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 Saniye Sınırı
+
+            Swal.fire({ 
+                title: 'Kaydediliyor...', 
+                text: 'Lütfen bekleyin',
+                didOpen: () => { Swal.showLoading() },
+                allowOutsideClick: false
+            });
+
             try {
-                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
+                // Fetch isteğini başlat
+                const response = await fetch(SCRIPT_URL, { 
+                    method: 'POST', 
+                    mode: 'no-cors', 
+                    body: JSON.stringify(data),
+                    signal: controller.signal // Sinyal ekleniyor
+                });
+
+                clearTimeout(timeoutId); // İstek başarılı olduysa zamanlayıcıyı iptal et
+
+                // Formu temizle ve sayaçları güncelle
                 clearForm();
                 updateCounter();
                 updatePendingStatus();
+
                 Swal.fire({ 
                     icon: 'success', 
                     title: 'Harika', 
@@ -255,7 +287,13 @@
                         setTimeout(() => seriInput.focus(), 50);
                     }
                 });
-            } catch (e) { saveToOfflineQueue(data); }
+
+            } catch (e) {
+                // Hata türü 'AbortError' ise (zaman aşımı) veya ağ hatasıysa kuyruğa at
+                clearTimeout(timeoutId);
+                console.warn("Bağlantı yavaş veya hata oluştu, çevrimdışı moda geçiliyor:", e.name);
+                saveToOfflineQueue(data);
+            }
         }
 
         function clearForm() {
