@@ -229,6 +229,13 @@
                 el.classList.add('normal'); 
                 msgEl.innerText = "✅ Uygun"; 
                 msgEl.style.color = "#2ecc71";
+
+                if (type === 's1') {
+                    setTimeout(() => {
+                        s2Input.focus();
+                    }, 400); // 400ms gecikme kullanıcının yazdığını görmesi için idealdir
+                }
+                
             }
 
             updateScreenColor(); // Her değişimde ana ekran rengini güncelle
@@ -464,3 +471,4 @@
     </script>
 </body>
 </html>
+
