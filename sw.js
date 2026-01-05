@@ -1,4 +1,4 @@
-const cacheName = 'gluko-v3'; // Versiyonu güncelledik (Önbelleği yenilemek için şart!)
+const cacheName = 'gluko-v4'; // Versiyonu güncelledik (Önbelleği yenilemek için şart!)
 const assets = [
   './', 
   './index.html', 
@@ -43,4 +43,5 @@ self.addEventListener('fetch', e => {
     })
   );
 });
+
 
